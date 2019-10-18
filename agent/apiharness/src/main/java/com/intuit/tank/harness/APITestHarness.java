@@ -84,6 +84,7 @@ public class APITestHarness {
     private String instanceId;
     private List<String> testPlanXmls = null;
     private ArrayList<ThreadGroup> threadGroupArray = new ArrayList<>();
+    List<TestPlanStarter> testPlanStarterList = new ArrayList<TestPlanStarter>();
     private int currentNumThreads = 0;
     private long startTime = 0;
     private int capacity = -1;
@@ -533,14 +534,13 @@ public class APITestHarness {
             agentRunData.setProjectName(hdWorkload.getName());
             agentRunData.setTankhttpClientClass(tankHttpClientClass);
             Object httpClient = ((TankHttpClient) Class.forName(tankHttpClientClass).newInstance()).createHttpClient();
-            List<TestPlanStarter> testPlans = new ArrayList<TestPlanStarter>();
             for (HDTestPlan plan : hdWorkload.getPlans()) {
                 if (plan.getUserPercentage() > 0) {
                     plan.setVariables(hdWorkload.getVariables());
                     ThreadGroup threadGroup = new ThreadGroup("Test Plan Runner Group");
                     threadGroupArray.add(threadGroup);
                     TestPlanStarter starter = new TestPlanStarter(httpClient, plan, agentRunData.getNumUsers(), tankHttpClientClass, threadGroup);
-                    testPlans.add(starter);
+                    testPlanStarterList.add(starter);
                     LOG.info(new ObjectMessage(ImmutableMap.of("Message", "Users for Test Plan " + plan.getTestPlanName() + " at "
                             + plan.getUserPercentage()
                             + "% = " + starter.getNumThreads())));
@@ -573,7 +573,7 @@ public class APITestHarness {
             }
             currentNumThreads = 0;
             if (agentRunData.getNumUsers() > 0) {
-                for (TestPlanStarter starter : testPlans) {
+                for (TestPlanStarter starter : testPlanStarterList) {
                     if (isDebug()) {
                         starter.run();
                     } else {
@@ -585,14 +585,14 @@ public class APITestHarness {
                 boolean ramping = true;
                 while (ramping) {
                     boolean done = true;
-                    for (TestPlanStarter starter : testPlans) {
+                    for (TestPlanStarter starter : testPlanStarterList) {
                         done = done && starter.isDone();
                     }
                     ramping = !done;
                     Thread.sleep(5000);
                 }
                 // if we broke early, fix our countdown latch
-                int numToCount = testPlans.stream().mapToInt(TestPlanStarter::getThreadsStarted).sum();
+                int numToCount = testPlanStarterList.stream().mapToInt(TestPlanStarter::getThreadsStarted).sum();
                 while (numToCount < agentRunData.getNumUsers()) {
                     doneSignal.countDown();
                     numToCount++;
@@ -659,6 +659,13 @@ public class APITestHarness {
         // numCompletedThreads = (int) (agentRunData.getNumUsers() - count);
         if (isDebug() || count < 10) {
             LOG.info(new ObjectMessage(ImmutableMap.of("Message", "User thread finished... Remaining->" + currentUsers)));
+        }
+        if (currentUsers == 0) {
+            for (TestPlanStarter starter : testPlanStarterList) {
+                starter.stop();
+            }
+            flowControllerTemplate.endTest();
+            // System.exit(0);
         }
     }
 

@@ -63,7 +63,7 @@ public class TestPlanStarter implements Runnable {
         // start rest of users sleeping between each interval
         LOG.info(LogUtil.getLogMessage("Starting ramp of additional " + (numThreads - threadsStarted)
                 + " users for plan " + plan.getTestPlanName() + "..."));
-        while (true) {
+        while (!done) {
             if ((threadsStarted - numInitialUsers) % APITestHarness.getInstance().getAgentRunData().getUserInterval() == 0) {
                 try {
                     Thread.sleep(rampDelay);
@@ -109,6 +109,10 @@ public class TestPlanStarter implements Runnable {
 
     public int getNumThreads() {
         return numThreads;
+    }
+
+    public void stop() {
+        done = true;
     }
 
     public boolean isDone() {
